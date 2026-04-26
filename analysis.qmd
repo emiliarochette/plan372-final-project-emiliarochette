@@ -1,8 +1,102 @@
 ---
-title: PLAN 372
-author: Your Name
+title: "Urban Heat Inequality in Miami-Dade County"
+author: "Emilia Rochette"
 ---
+```{r}
+library(sf)
 
-Place your analysis code in this file; you must not rename it, though you may delete these instructions. Please update the block above with the name of the assignment and with your name.When you push your code to github, it will automatically be rendered for grading. You can see whether the automatic rendering worked in the "Actions" tab of the github repository.
+tracts <- st_read("data/tl_2025_12_tract.shp")
+tracts_mdc <- tracts[tracts$COUNTYFP == "086", ]
+nrow(tracts_mdc)
+plot(st_geometry(tracts_mdc))
+```
+```{r}
+library(tidyverse)
 
-If you use any libraries other than `tidyverse`, `lubridate`, `sf`, `ggplot2`, `here`, `terra`, and `ggspatial` add them to the list in the DESCRIPTION file.
+race <- read_csv("data/acs_race.csv")
+income <- read_csv("data/acs_income.csv")
+names(race)
+names(income)
+
+race_clean <- race %>%
+  select(
+    GEOID = `GEO_ID`,
+    total_pop = `B03002_001E`,
+    white = `B03002_003E`,
+    black = `B03002_004E`,
+    hispanic = `B03002_012E`
+  ) %>%
+  mutate(
+    GEOID = str_sub(GEOID, -11),
+    total_pop = as.numeric(total_pop),
+    white = as.numeric(white),
+    black = as.numeric(black),
+    hispanic = as.numeric(hispanic),
+    pct_minority = 100 - (white / total_pop * 100)
+  )
+
+income_clean <- income %>%
+  select(
+    GEOID = `GEO_ID`,
+    median_income = `B19013_001E`
+  ) %>%
+  mutate(
+    GEOID = str_sub(GEOID, -11),
+    median_income = as.numeric(median_income)
+  )
+
+acs_data <- left_join(race_clean, income_clean, by = "GEOID")
+
+tracts_mdc <- left_join(tracts_mdc, acs_data, by = "GEOID")
+
+summary(tracts_mdc$median_income)
+summary(tracts_mdc$pct_minority)
+```
+```{r}
+library(ggplot2)
+
+ggplot(tracts_mdc) +
+  geom_sf(aes(fill = median_income)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+  labs(
+    title = "Median Household Income in Miami-Dade County",
+    fill = "Income ($)"
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot(tracts_mdc) +
+  geom_sf(aes(fill = pct_minority)) +
+  scale_fill_viridis_c(option = "magma", na.value = "grey90") +
+  labs(
+    title = "Percent Minority Population in Miami-Dade County",
+    fill = "% Minority"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(tracts_mdc, aes(x = median_income, y = pct_minority)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red") +
+  labs(
+    title = "Relationship Between Income and Minority Population",
+    x = "Median Income",
+    y = "% Minority"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+tracts_mdc <- tracts_mdc %>%
+  mutate(log_income = log(median_income))
+ggplot(tracts_mdc, aes(x = log_income, y = pct_minority)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(
+    title = "Income vs Minority Population (Log Scale)",
+    x = "Log Median Income",
+    y = "% Minority"
+  ) +
+  theme_minimal()
+```
